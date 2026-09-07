@@ -825,31 +825,42 @@ def prepare_xa_frames():
     if _xa_frames_cache is not None:
         return _xa_frames_cache
     if not os.path.exists(XA_FILE):
+        print(f"[XAMIC] Không tìm thấy tệp âm thanh: {XA_FILE}", flush=True)
         return None
     try:
-        os.environ["PATH"] = BASE + os.pathsep + os.environ.get("PATH", "")
-        from pyogg import OpusFile
-        import opuslib
-        import numpy as np
-        of = OpusFile(XA_FILE)
-        n = of.buffer_length // 2
-        arr = np.ctypeslib.as_array(of.buffer, shape=(n,))
-        if of.channels >= 2:
-            st = np.ascontiguousarray(arr.reshape(-1, of.channels)[:, :2])
-        else:
-            st = np.ascontiguousarray(np.repeat(arr.reshape(-1, 1), 2, axis=1))
-        peak = max(1, int(np.abs(st).max()))
-        amp = np.clip(st.astype(np.float64) * (0.95 / peak * 6.0), -32767, 32767).astype(np.int16)
-        pcm = np.ascontiguousarray(amp[::2]).tobytes()
-        frame_bytes = 960 * 2 * 2
-        nf = len(pcm) // frame_bytes
-        if nf == 0:
-            return None
-        enc = opuslib.Encoder(48000, 2, opuslib.APPLICATION_AUDIO)
-        frames = [enc.encode(pcm[i * frame_bytes:(i + 1) * frame_bytes], 960) for i in range(nf)]
-        _xa_frames_cache = frames
-        return frames
-    except Exception:
+        # Bộ giải nén Ogg Opus thuần Python 100% không phụ thuộc C/DLL
+        with open(XA_FILE, "rb") as f:
+            data = f.read()
+        frames = []
+        idx = 0
+        packet_num = 0
+        while idx < len(data):
+            if data[idx:idx + 4] != b"OggS":
+                break
+            seg_count = data[idx + 26]
+            seg_table = data[idx + 27 : idx + 27 + seg_count]
+            body_offset = idx + 27 + seg_count
+
+            cur_pkt = bytearray()
+            for l in seg_table:
+                cur_pkt.extend(data[body_offset : body_offset + l])
+                body_offset += l
+                if l < 255:
+                    packet_num += 1
+                    # Bỏ qua OpusHead (gói 1) và OpusTags (gói 2)
+                    if packet_num > 2 and len(cur_pkt) > 0:
+                        frames.append(bytes(cur_pkt))
+                    cur_pkt = bytearray()
+            idx = body_offset
+
+        if frames:
+            _xa_frames_cache = frames
+            print(f"[XAMIC] Loaded {len(frames)} Opus frames successfully from {os.path.basename(XA_FILE)}", flush=True)
+            return frames
+        print("[XAMIC] No Opus frames found", flush=True)
+        return None
+    except Exception as e:
+        print(f"[XAMIC] Audio extract error: {e}", flush=True)
         return None
 
 

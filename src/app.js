@@ -115,45 +115,72 @@
   function dashShell() {
     return (
       '<header class="topbar glass">' +
-      '<div class="brand">WUMMI<span class="grad">HANGER</span></div>' +
+      '<div class="brand">' +
+      '<span class="brand-icon">🎧</span> ' +
+      'WUMMI<span class="grad">HANGER</span>' +
+      '<span class="tag-pro">v2.5</span>' +
+      "</div>" +
+      '<div class="topbar-center">' +
+      '<div class="status-pill live"><span class="pulse-dot"></span><span>CLOUD ENGINE 24/7 ACTIVE</span></div>' +
+      "</div>" +
+      '<div class="topbar-right">' +
       '<div id="user-chip" class="user-chip"></div>' +
-      '<button id="btn-logout" class="btn-ghost">Đăng xuất</button>' +
+      '<button id="btn-logout" class="btn-ghost-danger">Đăng xuất</button>' +
+      "</div>" +
       "</header>" +
       '<main class="dash">' +
 
       '<aside class="panel glass guild-panel">' +
-      '<div class="panel-head"><h3>SERVERS</h3><span id="guild-count" class="count">0</span></div>' +
-      '<div class="search-box"><span class="search-ic">&#128269;</span><input id="guild-search" type="text" placeholder="Tìm server..." autocomplete="off" spellcheck="false"></div>' +
+      '<div class="panel-head">' +
+      '<div class="panel-title-wrap"><span class="panel-icon">🌐</span><h3>MÁY CHỦ DISCORD</h3></div>' +
+      '<span id="guild-count" class="count">0</span>' +
+      "</div>" +
+      '<div class="search-box">' +
+      '<span class="search-ic">&#128269;</span>' +
+      '<input id="guild-search" type="text" placeholder="Tìm kiếm máy chủ..." autocomplete="off" spellcheck="false">' +
+      "</div>" +
       '<div id="guild-list" class="list"></div>' +
       "</aside>" +
 
       '<section class="panel glass chan-panel">' +
-      '<div class="panel-head"><h3 id="chan-title">CHỌN SERVER</h3></div>' +
+      '<div class="panel-head">' +
+      '<div class="panel-title-wrap"><span class="panel-icon">🔊</span><h3 id="chan-title">CHỌN SERVER</h3></div>' +
+      "</div>" +
       '<div id="channel-list" class="list"></div>' +
       "</section>" +
 
       '<aside class="panel glass hang-panel">' +
-      '<div class="panel-head"><h3>VOICE HANG</h3><span id="hang-count" class="count">0</span></div>' +
+      '<div class="panel-head">' +
+      '<div class="panel-title-wrap"><span class="panel-icon">🎙️</span><h3>VOICE STUDIO 24/7</h3></div>' +
+      '<span id="hang-count" class="count">0</span>' +
+      "</div>" +
       '<div class="hang-box">' +
       '<div id="hang-status" class="hang-status idle">Chưa treo kênh nào</div>' +
       '<div id="hang-list" class="hang-list"></div>' +
       '<button id="btn-stop-all" class="btn-danger hidden">Ngừng tất cả voice</button>' +
       "</div>" +
-      '<div class="hang-note">Treo voice nhiều server cùng lúc &mdash; kết nối chạy trên máy chủ, đóng web vẫn giữ. Bấm kênh đang treo để ngừng kênh đó.</div>' +
+      '<div class="hang-note">' +
+      '<span class="note-bullet">💡</span> Treo voice chạy nền 24/7 trên máy chủ, đóng tab web vẫn duy trì. (Lưu ý: Nếu triển khai trên Render Free, cổng UDP voice bị Render chặn; chạy trên máy tính hoặc VPS để xả mic phát ra âm thanh).' +
+      "</div>" +
       "</aside>" +
 
       '<section class="panel glass quest-panel">' +
       '<div class="panel-head">' +
-      "<h3>AUTO QUEST <span id=\"quest-count\" class=\"count\">0</span></h3>" +
+      '<div class="panel-title-wrap"><span class="panel-icon">🎯</span><h3>DISCORD AUTO QUEST</h3><span id="quest-count" class="count">0</span></div>' +
       '<div class="quest-actions">' +
       '<label class="switch"><input type="checkbox" id="quest-auto-accept" checked><span>Auto nhận quest</span></label>' +
       '<button id="btn-quest-toggle" class="btn-join">Bật Auto Quest</button>' +
       "</div>" +
       "</div>" +
       '<div id="quest-list" class="quest-list"></div>' +
-      '<div class="quest-log-head"><h3>NHẬT KÝ</h3><span id="quest-running" class="qstate idle">ĐANG TẮT</span></div>' +
+      '<div class="quest-log-head">' +
+      '<div class="panel-title-wrap"><span class="panel-icon">💻</span><h3>CONSOLE LOGS CHẠY NỀN</h3></div>' +
+      '<span id="quest-running" class="qstate idle">ĐANG TẮT</span>' +
+      "</div>" +
       '<div id="quest-log" class="quest-log">Chưa có nhật ký. Bật Auto Quest để bắt đầu.</div>' +
-      '<div class="hang-note">Tự nhận quest và hoàn thành (xem video / chơi game / stream / activity). Tất cả quest chạy <b>song song cùng lúc</b>. Không nên chạy khi đang online trên thiết bị khác.</div>' +
+      '<div class="hang-note">' +
+      '<span class="note-bullet">🚀</span> Tự động nhận và hoàn thành các loại quest Discord (Video, Game Desktop, Stream, Activity) song song cùng lúc.' +
+      "</div>" +
       "</section>" +
       "</main>"
     );
@@ -708,6 +735,35 @@
     $("#token-input").addEventListener("keydown", function (e) {
       if (e.key === "Enter") doLogin();
     });
+
+    var toggleBtn = $("#btn-toggle-token");
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", function () {
+        var inp = $("#token-input");
+        if (!inp) return;
+        var isPass = inp.type === "password";
+        inp.type = isPass ? "text" : "password";
+        toggleBtn.textContent = isPass ? "🙈" : "👁️";
+      });
+    }
+
+    var pasteBtn = $("#btn-paste-token");
+    if (pasteBtn) {
+      pasteBtn.addEventListener("click", function () {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then(function (clipText) {
+            if (clipText) {
+              $("#token-input").value = clipText.trim();
+              toast("Đã dán token thành công", "ok");
+            }
+          }).catch(function () {
+            toast("Không thể tự động đọc clipboard, hãy dán thủ công", "err");
+          });
+        } else {
+          toast("Trình duyệt không hỗ trợ đọc clipboard", "err");
+        }
+      });
+    }
 
     if (TOKEN) {
       api("/api/status").then(function (st) {

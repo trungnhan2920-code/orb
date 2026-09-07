@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<title>WUMMI HANGER</title>
+<title>WUMMI HANGER PRO • 24/7 Voice & Auto Quest</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/style.min.css">
 </head>
 <body>
@@ -20,33 +20,51 @@
 
 <div id="view-login" class="view active">
   <div class="hero">
-    <div class="badge"><span class="pulse-dot"></span>SELFBOT &bull; VOICE HANG &bull; AUTO QUEST</div>
-    <h1 class="title">WUMMI<span class="grad">HANGER</span></h1>
-    <p class="subtitle">Dán token Discord &mdash; treo voice nhiều server 24/7 + auto hoàn thành quest. Đóng web vẫn giữ kết nối.</p>
+    <div class="badge"><span class="pulse-dot"></span> WUMMI ENGINE v2.5 &bull; VOICE 24/7 &bull; AUTO QUEST</div>
+    <h1 class="title">WUMMI<span class="grad">HANGER</span><span class="tag-pro">PRO</span></h1>
+    <p class="subtitle">Hệ thống treo voice Discord 24/7 đa tính năng &bull; Tự động hoàn thành Discord Quest &bull; Xả mic phát âm thanh liên tục. Hoạt động liên tục trên máy chủ kể cả khi đóng trình duyệt.</p>
+
+    <div class="features-pill-row">
+      <span class="feature-pill"><span class="fp-icon">🎧</span> Treo Voice 24/7</span>
+      <span class="feature-pill"><span class="fp-icon">🔥</span> Xả Mic Auto</span>
+      <span class="feature-pill"><span class="fp-icon">🎯</span> Auto Quest 100%</span>
+      <span class="feature-pill"><span class="fp-icon">⚡</span> Giữ Kết Nối Khi Đóng Web</span>
+    </div>
 
     <div class="login-card glass">
-      <label class="field-label" for="token-input">DISCORD TOKEN</label>
+      <div class="login-card-head">
+        <label class="field-label" for="token-input">DISCORD USER TOKEN</label>
+        <span class="token-hint">Không chia sẻ token cho người khác</span>
+      </div>
       <div class="input-row">
-        <input id="token-input" type="password" placeholder="Nhập token Discord..." autocomplete="off" spellcheck="false">
-        <button id="btn-login" class="btn-primary">Kết nối <span class="btn-arrow">&rarr;</span></button>
+        <div class="token-input-wrap">
+          <input id="token-input" type="password" placeholder="Dán token Discord của bạn vào đây..." autocomplete="off" spellcheck="false">
+          <button type="button" id="btn-toggle-token" class="btn-input-icon" title="Ẩn/Hiện token">👁️</button>
+          <button type="button" id="btn-paste-token" class="btn-input-paste" title="Dán từ Clipboard">📋 Dán</button>
+        </div>
+        <button id="btn-login" class="btn-primary">
+          <span>Kết nối ngay</span>
+          <span class="btn-arrow">&rarr;</span>
+        </button>
       </div>
       <div id="login-msg" class="msg"></div>
       <div class="login-meta">
-        <span class="mini-dot"></span> Máy chủ luôn bật &bull; Giữ kết nối kể cả khi đóng web
+        <span class="mini-dot"></span> Máy chủ máy ảo 24/7 &bull; Mã hóa an toàn &bull; Không lưu trữ mật khẩu
       </div>
     </div>
 
     <div class="clock-card glass">
-      <div class="clock-label">SERVER TIME</div>
+      <div class="clock-label"><span class="hud-indicator"></span> SERVER TIME (GMT+7)</div>
       <div id="clock" class="clock">00:00:00</div>
       <div id="date" class="date"></div>
     </div>
   </div>
-  <footer class="foot">Powered by <b>PhLong</b> &bull; wummi.site.je</footer>
+  <footer class="foot">WUMMI HANGER &bull; Phát triển bởi <b>PhLong</b> &bull; Bản quyền &copy; 2026 wummi.site.je</footer>
 </div>
 
 <div id="view-dash" class="view"></div>
 <div id="toast" class="toast"></div>
+
 <script src="/assets/app.min.js"></script>
 </body>
 </html>
