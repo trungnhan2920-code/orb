@@ -118,10 +118,10 @@
       '<div class="brand">' +
       '<span class="brand-icon">🎧</span> ' +
       'WUMMI<span class="grad">HANGER</span>' +
-      '<span class="tag-pro">v2.5</span>' +
+      '<span class="tag-pro">PRO v3.0</span>' +
       "</div>" +
       '<div class="topbar-center">' +
-      '<div class="status-pill live"><span class="pulse-dot"></span><span>CLOUD ENGINE 24/7 ACTIVE</span></div>' +
+      '<div class="status-pill live"><span class="pulse-dot"></span><span>CLOUD ENGINE 24/7 ACTIVE • HIGH-SPEED</span></div>' +
       "</div>" +
       '<div class="topbar-right">' +
       '<div id="user-chip" class="user-chip"></div>' +
@@ -160,26 +160,36 @@
       '<button id="btn-stop-all" class="btn-danger hidden">Ngừng tất cả voice</button>' +
       "</div>" +
       '<div class="hang-note">' +
-      '<span class="note-bullet">💡</span> Treo voice chạy nền 24/7 trên máy chủ, đóng tab web vẫn duy trì. (Lưu ý: Nếu triển khai trên Render Free, cổng UDP voice bị Render chặn; chạy trên máy tính hoặc VPS để xả mic phát ra âm thanh).' +
+      '<span class="note-bullet">💡</span> Treo voice 24/7 tự động duy trì. Xả mic sử dụng chuẩn mã hóa mới nhất AEAD AES256-GCM. (Lưu ý: Chạy trên máy tính hoặc VPS để truyền gói tin UDP voice không bị nhà cung cấp mạng chặn).' +
       "</div>" +
       "</aside>" +
 
       '<section class="panel glass quest-panel">' +
       '<div class="panel-head">' +
-      '<div class="panel-title-wrap"><span class="panel-icon">🎯</span><h3>DISCORD AUTO QUEST</h3><span id="quest-count" class="count">0</span></div>' +
+      '<div class="panel-title-wrap"><span class="panel-icon">🎯</span><h3>DISCORD QUEST HUB</h3><span id="quest-count" class="count">0</span></div>' +
       '<div class="quest-actions">' +
       '<label class="switch"><input type="checkbox" id="quest-auto-accept" checked><span>Auto nhận quest</span></label>' +
       '<button id="btn-quest-toggle" class="btn-join">Bật Auto Quest</button>' +
       "</div>" +
       "</div>" +
-      '<div id="quest-list" class="quest-list"></div>' +
-      '<div class="quest-log-head">' +
-      '<div class="panel-title-wrap"><span class="panel-icon">💻</span><h3>CONSOLE LOGS CHẠY NỀN</h3></div>' +
-      '<span id="quest-running" class="qstate idle">ĐANG TẮT</span>' +
+      '<div id="quest-list" class="quest-grid"></div>' +
+      '<div class="terminal-card glass">' +
+      '<div class="terminal-head">' +
+      '<div class="terminal-head-left">' +
+      '<div class="terminal-dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>' +
+      '<div class="terminal-title"><span class="term-prompt">$</span> <span>CONSOLE LOGS // AUTO QUEST WORKER</span></div>' +
       "</div>" +
-      '<div id="quest-log" class="quest-log">Chưa có nhật ký. Bật Auto Quest để bắt đầu.</div>' +
+      '<div class="terminal-head-right">' +
+      '<span id="quest-running" class="qstate idle">ĐANG TẮT</span>' +
+      '<button type="button" id="btn-copy-log" class="btn-term-action" title="Sao chép toàn bộ logs">📋 Copy</button>' +
+      '<button type="button" id="btn-clear-log" class="btn-term-action" title="Xóa logs">🗑️ Xóa</button>' +
+      '<label class="terminal-autoscroll"><input type="checkbox" id="chk-autoscroll" checked><span>Tự cuộn</span></label>' +
+      "</div>" +
+      "</div>" +
+      '<div id="quest-log" class="terminal-body"></div>' +
+      "</div>" +
       '<div class="hang-note">' +
-      '<span class="note-bullet">🚀</span> Tự động nhận và hoàn thành các loại quest Discord (Video, Game Desktop, Stream, Activity) song song cùng lúc.' +
+      '<span class="note-bullet">🚀</span> Tự động nhận và xử lý song song tất cả các nhiệm vụ Discord khả dụng. Log hiển thị tiến độ thời gian thực.' +
       "</div>" +
       "</section>" +
       "</main>"
@@ -499,6 +509,30 @@
       $("#btn-stop-all").addEventListener("click", stopAllHangs);
       $("#btn-quest-toggle").addEventListener("click", toggleQuest);
 
+      var copyLogBtn = $("#btn-copy-log");
+      if (copyLogBtn) {
+        copyLogBtn.addEventListener("click", function () {
+          var logEl = $("#quest-log");
+          if (!logEl || !logEl.innerText) return toast("Chưa có logs để sao chép", "err");
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(logEl.innerText).then(function () {
+              toast("Đã sao chép toàn bộ logs", "ok");
+            }).catch(function () {
+              toast("Không thể sao chép logs", "err");
+            });
+          }
+        });
+      }
+
+      var clearLogBtn = $("#btn-clear-log");
+      if (clearLogBtn) {
+        clearLogBtn.addEventListener("click", function () {
+          var logEl = $("#quest-log");
+          if (logEl) logEl.innerHTML = '<div class="log-empty"><span class="empty-term-icon">⚡</span><span>Đã xóa nhật ký. Chờ sự kiện tiếp theo...</span></div>';
+          toast("Đã xóa nhật ký", "ok");
+        });
+      }
+
       api("/api/status").then(function (st) {
         if (st.ok && st.hangs && st.hangs.length) {
           HANGS = {};
@@ -540,7 +574,7 @@
     btn.classList.toggle("active", running);
     btn.disabled = false;
     var qr = $("#quest-running");
-    qr.textContent = running ? "Đang chạy" : "Đang tắt";
+    qr.textContent = running ? "ĐANG CHẠY" : "ĐANG TẮT";
     qr.className = "qstate " + (running ? "run" : "idle");
   }
 
@@ -549,11 +583,18 @@
     if (!box) return;
     $("#quest-count").textContent = quests.length;
     if (!quests.length) {
-      box.innerHTML = '<div class="empty">Không có quest nào đang hoạt động</div>';
+      box.className = "quest-grid empty-wrap";
+      box.innerHTML =
+        '<div class="empty-quest-card">' +
+        '<span class="empty-quest-icon">🎯</span>' +
+        '<b>Không có nhiệm vụ Discord nào</b>' +
+        '<span>Hãy kiểm tra tab Quest trong Cài đặt người dùng Discord để xác nhận tài khoản có nhiệm vụ</span>' +
+        '</div>';
       return;
     }
+    box.className = "quest-grid";
 
-    var existingItems = box.querySelectorAll(".quest-item");
+    var existingItems = box.querySelectorAll(".quest-card");
     var currentIds = Array.prototype.map.call(existingItems, function (el) {
       return el.getAttribute("data-id");
     });
@@ -564,22 +605,24 @@
 
     if (idsMatch) {
       quests.forEach(function (q) {
-        var el = box.querySelector('.quest-item[data-id="' + q.id + '"]');
+        var el = box.querySelector('.quest-card[data-id="' + q.id + '"]');
         if (!el) return;
-        var pct = q.target > 0 ? Math.min(100, Math.round((q.value / q.target) * 100)) : 0;
-        var st = q.completed
-          ? ["done", "Hoàn thành"]
-          : q.enrolled
-            ? ["run", "Đang chạy"]
-            : ["idle", "Chưa nhận"];
-        var fill = el.querySelector(".q-fill");
+        var pct = q.target > 0 ? Math.min(100, Math.round((q.value / q.target) * 100)) : (q.completed ? 100 : 0);
+        var fill = el.querySelector(".quest-fill");
         if (fill) fill.style.width = pct + "%";
-        var prog = el.querySelector(".q-prog");
-        if (prog) prog.textContent = q.target ? Math.min(q.value, q.target) + "/" + q.target + "s (" + pct + "%)" : "";
-        var status = el.querySelector(".q-status");
-        if (status) {
-          status.className = "q-status " + st[0];
-          status.textContent = st[1];
+        var progVal = el.querySelector(".quest-prog-val");
+        if (progVal) progVal.textContent = q.target ? (Math.min(q.value, q.target) + "/" + q.target + "s (" + pct + "%)") : (q.completed ? "100%" : "");
+        var statusBadge = el.querySelector(".quest-badge-state");
+        var btnClaim = el.querySelector(".btn-quest-primary");
+        if (q.completed) {
+          if (statusBadge) { statusBadge.className = "quest-badge-state done"; statusBadge.textContent = "Hoàn thành"; }
+          if (btnClaim) { btnClaim.className = "btn-quest-primary ready"; btnClaim.textContent = "Nhận phần thưởng"; }
+        } else if (q.enrolled) {
+          if (statusBadge) { statusBadge.className = "quest-badge-state run"; statusBadge.textContent = "Đang chạy " + pct + "%"; }
+          if (btnClaim) { btnClaim.className = "btn-quest-primary running"; btnClaim.innerHTML = '<span class="quest-spinner"></span> Đang tự chạy ✦'; }
+        } else {
+          if (statusBadge) { statusBadge.className = "quest-badge-state idle"; statusBadge.textContent = "Chưa nhận"; }
+          if (btnClaim) { btnClaim.className = "btn-quest-primary idle"; btnClaim.textContent = "Nhận nhiệm vụ"; }
         }
       });
       return;
@@ -588,35 +631,92 @@
     box.innerHTML = "";
     quests.forEach(function (q, i) {
       var el = document.createElement("div");
-      el.className = "quest-item";
+      el.className = "quest-card";
       el.setAttribute("data-id", q.id);
-      el.style.animationDelay = Math.min(i, 10) * 0.05 + "s";
-      var pct = q.target > 0 ? Math.min(100, Math.round((q.value / q.target) * 100)) : 0;
-      var st = q.completed
-        ? ["done", "Hoàn thành"]
-        : q.enrolled
-          ? ["run", "Đang chạy"]
-          : ["idle", "Chưa nhận"];
+      el.style.animationDelay = (i * 60) + "ms";
+      var pct = q.target > 0 ? Math.min(100, Math.round((q.value / q.target) * 100)) : (q.completed ? 100 : 0);
+      var banner = q.banner_url || "";
+      var rewardIcon = q.reward_icon || "/assets/orb-icon.svg";
+      var publisher = q.publisher || "Universal Pictures";
+      var expiry = q.expires_str ? ("Kết thúc vào " + esc(q.expires_str)) : "Đang diễn ra";
+      var questTag = "NHIỆM VỤ " + esc((q.name || "DISCORD QUEST").toUpperCase());
+      var rewardTitle = "Nhận ✦ " + esc(q.reward_name || "200 Orbs");
+      var desc = esc(q.desc || "Xem video để nhận được 200 Orbs!");
+      
+      var claimClass = q.completed ? "ready" : (q.enrolled ? "running" : "idle");
+      var claimText = q.completed ? "Nhận phần thưởng" : (q.enrolled ? '<span class="quest-spinner"></span> Đang tự chạy ✦' : "Nhận nhiệm vụ");
+      var statusClass = q.completed ? "done" : (q.enrolled ? "run" : "idle");
+      var statusText = q.completed ? "Hoàn thành" : (q.enrolled ? ("Đang chạy " + pct + "%") : "Chưa nhận");
+
       el.innerHTML =
-        '<div class="q-info"><b class="q-name">' + esc(q.name) + '</b><span class="q-app">' + esc(q.app) + "</span></div>" +
-        '<span class="q-badge">' + (TASK_LABEL[q.task] || esc(q.task || "?")) + "</span>" +
-        '<div class="q-bar"><div class="q-fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="q-prog">' + (q.target ? Math.min(q.value, q.target) + "/" + q.target + "s (" + pct + "%)" : "") + "</div>" +
-        '<span class="q-status ' + st[0] + '">' + st[1] + "</span>";
+        '<div class="quest-card-hero' + (!banner ? " no-banner" : "") + '">' +
+          (banner ? '<img class="quest-banner-img" src="' + banner + '" onerror="this.parentElement.classList.add(\'no-banner\');this.remove();" alt="">' : '') +
+          '<div class="quest-hero-overlay"></div>' +
+          '<div class="quest-hero-top-btns">' +
+            '<button type="button" class="btn-hero-icon" title="Xem trước video"><span class="play-tri">▶</span></button>' +
+            '<button type="button" class="btn-hero-icon" title="Tùy chọn">&#8226;&#8226;&#8226;</button>' +
+          '</div>' +
+          '<div class="quest-hero-title-overlay">' + esc(q.name) + '</div>' +
+        '</div>' +
+        '<div class="quest-meta-bar">' +
+          '<div class="quest-publisher-wrap">' +
+            '<span>Được quảng bá bởi</span> ' +
+            '<span class="verified-check" title="Đã xác minh">✓</span> ' +
+            '<b>' + esc(publisher) + '</b>' +
+          '</div>' +
+          '<span class="quest-expiry-text">' + expiry + '</span>' +
+        '</div>' +
+        '<div class="quest-card-body">' +
+          '<div class="quest-orb-wrapper">' +
+            '<div class="quest-orb-glow-ring">' +
+              '<img class="quest-orb-img" src="' + rewardIcon + '" onerror="this.onerror=null;this.src=\'/assets/orb-icon.svg\'" alt="Orbs">' +
+            '</div>' +
+          '</div>' +
+          '<div class="quest-details">' +
+            '<div class="quest-type-label">' + questTag + '</div>' +
+            '<div class="quest-reward-headline">' + rewardTitle + '</div>' +
+            '<div class="quest-subtitle">' + desc + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="quest-progress-section">' +
+          '<div class="quest-bar"><div class="quest-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="quest-prog-row">' +
+            '<span class="quest-badge-state ' + statusClass + '">' + statusText + '</span>' +
+            '<span class="quest-prog-val">' + (q.target ? (Math.min(q.value, q.target) + "/" + q.target + "s (" + pct + "%)") : "") + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="quest-card-btns">' +
+          '<button type="button" class="btn-quest-sub">Tham Gia Máy C...</button>' +
+          '<button type="button" class="btn-quest-primary ' + claimClass + '">' + claimText + '</button>' +
+        '</div>';
+
       box.appendChild(el);
     });
+  }
+
+  function formatLogLine(line) {
+    var safe = esc(line);
+    safe = safe.replace(/^\[(\d{2}:\d{2}:\d{2})\]/, '<span class="log-time">[$1]</span>');
+    safe = safe.replace(/\[Auto Quest\]/g, '<span class="log-tag auto">[Auto Quest]</span>');
+    safe = safe.replace(/\[Activity\]/g, '<span class="log-tag act">[Activity]</span>');
+    safe = safe.replace(/\[(WATCH_VIDEO|PLAY_ON_DESKTOP|STREAM_ON_DESKTOP)\]/g, '<span class="log-tag task">[$1]</span>');
+    safe = safe.replace(/(Hoàn thành[^\n<]*|thành công[^\n<]*)/gi, '<span class="log-ok">$1</span>');
+    safe = safe.replace(/(Rate limited[^\n<]*|Lỗi[^\n<]*|Bỏ sau[^\n<]*)/gi, '<span class="log-warn">$1</span>');
+    safe = safe.replace(/(Tiến độ: \d+\/\d+s)/gi, '<span class="log-prog">$1</span>');
+    return '<div class="log-line">' + safe + '</div>';
   }
 
   function renderQuestLog(logs) {
     var el = $("#quest-log");
     if (!el) return;
     if (!logs.length) {
-      el.textContent = "Chưa có nhật ký. Bật Auto Quest để bắt đầu.";
+      el.innerHTML = '<div class="log-empty"><span class="empty-term-icon">⚡</span><span>Chưa có nhật ký. Bật Auto Quest để bắt đầu tiến trình chạy ngầm.</span></div>';
       return;
     }
-    var nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-    el.textContent = logs.slice(-150).join("\n");
-    if (nearBottom) el.scrollTop = el.scrollHeight;
+    var autoScroll = $("#chk-autoscroll") ? $("#chk-autoscroll").checked : true;
+    var html = logs.slice(-150).map(formatLogLine).join("");
+    el.innerHTML = html;
+    if (autoScroll) el.scrollTop = el.scrollHeight;
   }
 
   function toggleQuest() {

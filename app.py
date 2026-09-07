@@ -625,16 +625,82 @@ def summarize_quest(q):
                 value = int(float(us.get("stream_progress_seconds") or us.get("streamProgressSeconds") or 0))
             except Exception:
                 pass
+
+    qid = str(q.get("id") or "")
+    msgs = cfg.get("messages") or {}
+    quest_name = msgs.get("quest_name") or msgs.get("questName") or QuestWorker._quest_name(q)
+    publisher = msgs.get("game_publisher") or msgs.get("gamePublisher") or (cfg.get("application") or {}).get("name") or "Universal Pictures"
+    game_title = msgs.get("game_title") or msgs.get("gameTitle") or quest_name
+
+    # Assets extraction
+    assets = cfg.get("assets") or {}
+    hero_hash = assets.get("hero") or assets.get("quest_bar_hero") or assets.get("banner")
+    banner_url = ""
+    if hero_hash:
+        if str(hero_hash).startswith("http"):
+            banner_url = str(hero_hash)
+        else:
+            banner_url = f"https://cdn.discordapp.com/quest-assets/{qid}/{hero_hash}.png"
+
+    # Rewards extraction
+    rewards_cfg = cfg.get("rewards_config") or {}
+    rewards = rewards_cfg.get("rewards") or []
+    reward_name = "200 Orbs"
+    reward_icon = ""
+    reward_count = 200
+    if rewards and isinstance(rewards, list) and len(rewards) > 0:
+        r0 = rewards[0]
+        r_msgs = r0.get("messages") or {}
+        reward_name = r_msgs.get("name") or r_msgs.get("name_with_article") or reward_name
+        r_asset = r0.get("asset")
+        if r_asset:
+            if str(r_asset).startswith("http"):
+                reward_icon = str(r_asset)
+            else:
+                reward_icon = f"https://cdn.discordapp.com/quest-rewards/{qid}/{r_asset}.png"
+        if r0.get("approximate_count"):
+            reward_count = r0.get("approximate_count")
+
+    # Format expiration date (e.g., "8/9")
+    expires_at = cfg.get("expires_at") or cfg.get("expiresAt")
+    expires_str = ""
+    if expires_at:
+        try:
+            dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+            expires_str = f"{dt.day}/{dt.month}"
+        except Exception:
+            expires_str = str(expires_at)[:10]
+
+    # Subtitle description based on task type
+    desc = f"Xem video để nhận được {reward_name}!"
+    if task_name == "PLAY_ON_DESKTOP":
+        mins = max(1, target // 60)
+        desc = f"Chơi game {mins} phút để nhận {reward_name}!"
+    elif task_name == "STREAM_ON_DESKTOP":
+        mins = max(1, target // 60)
+        desc = f"Phát trực tiếp {mins} phút cho bạn bè để nhận {reward_name}!"
+    elif task_name == "PLAY_ACTIVITY":
+        desc = f"Tham gia Activity để nhận {reward_name}!"
+
     return {
-        "id": q.get("id"),
-        "name": QuestWorker._quest_name(q),
+        "id": qid,
+        "name": quest_name,
         "app": (cfg.get("application") or {}).get("name", ""),
+        "publisher": publisher,
+        "game_title": game_title,
+        "banner_url": banner_url,
+        "reward_name": reward_name,
+        "reward_icon": reward_icon,
+        "reward_count": reward_count,
+        "expires_str": expires_str,
+        "desc": desc,
         "task": task_name,
         "target": target,
         "value": value,
         "enrolled": bool(us.get("enrolled_at") or us.get("enrolledAt")),
         "completed": bool(us.get("completed_at") or us.get("completedAt")),
-        "expires_at": cfg.get("expires_at") or cfg.get("expiresAt"),
+        "claimed": bool(us.get("claimed_at") or us.get("claimedAt")),
+        "expires_at": expires_at,
     }
 
 
@@ -767,7 +833,7 @@ async def hang_voice(token, guild_id, channel_id, stop_event):
                                     try:
                                         await vctx["ws"].send(json.dumps({
                                             "op": 5,
-                                            "d": {"speaking": 1 if on else 0, "delay": 0, "ssrc": vctx["ssrc"]},
+                                            "d": {"speaking": 5 if on else 0, "delay": 0, "ssrc": vctx["ssrc"]},
                                         }))
                                     except Exception:
                                         pass
@@ -786,9 +852,14 @@ async def hang_voice(token, guild_id, channel_id, stop_event):
                     finally:
                         try:
                             if vctx:
-                                await vctx["ws"].send(json.dumps({
-                                    "op": 5, "d": {"speaking": 0, "delay": 0, "ssrc": vctx["ssrc"]},
-                                }))
+                                if vctx.get("hb_task"):
+                                    vctx["hb_task"].cancel()
+                                try:
+                                    await vctx["ws"].send(json.dumps({
+                                        "op": 5, "d": {"speaking": 0, "delay": 0, "ssrc": vctx["ssrc"]},
+                                    }))
+                                except Exception:
+                                    pass
                                 vctx["sock"].close()
                                 await vctx["ws"].close()
                         except Exception:
@@ -885,12 +956,33 @@ def _op4_voice(ws, guild_id, channel_id, mute):
 
 
 async def _voice_handshake(token, key, guild_id, channel_id, session_id, endpoint, vtoken, user_id):
-    from nacl.secret import SecretBox
-    uri = "wss://" + endpoint + "/?v=4"
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    uri = "wss://" + endpoint + "/?v=8"
     host = endpoint.split(":")[0]
     loop = asyncio.get_event_loop()
     ws = await websockets.connect(uri, max_size=None, ping_interval=None)
+    hb_task = None
     try:
+        # 1. Chờ Opcode 8 Hello từ Voice Gateway v8
+        hb_interval = 40.0
+        try:
+            msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=15))
+            if msg.get("op") == 8:
+                hb_interval = float(msg.get("d", {}).get("heartbeat_interval", 40000)) / 1000.0
+        except Exception as e:
+            xa_log(token, key, f"voice ws: bỏ qua chờ hello: {e}")
+
+        async def _voice_heartbeat():
+            while True:
+                try:
+                    await asyncio.sleep(max(5.0, hb_interval * 0.75))
+                    await ws.send(json.dumps({"op": 3, "d": int(time.time() * 1000)}))
+                except Exception:
+                    break
+
+        hb_task = asyncio.create_task(_voice_heartbeat())
+
+        # 2. Gửi Opcode 0 Identify
         await ws.send(json.dumps({
             "op": 0,
             "d": {
@@ -911,16 +1003,24 @@ async def _voice_handshake(token, key, guild_id, channel_id, session_id, endpoin
                 ssrc = d.get("ssrc")
                 port = int(d.get("port") or 0)
                 modes = d.get("modes") or []
-                mode = "xsalsa20_poly1305" if "xsalsa20_poly1305" in modes else (modes[0] if modes else "plain")
+                if "aead_aes256_gcm_rtpsize" in modes:
+                    mode = "aead_aes256_gcm_rtpsize"
+                elif "aead_xchacha20_poly1305_rtpsize" in modes:
+                    mode = "aead_xchacha20_poly1305_rtpsize"
+                elif "xsalsa20_poly1305" in modes:
+                    mode = "xsalsa20_poly1305"
+                else:
+                    mode = modes[0] if modes else "aead_aes256_gcm_rtpsize"
             elif msg.get("op") == 8:
-                raise ConnectionError("voice websocket đóng")
+                hb_interval = float(msg.get("d", {}).get("heartbeat_interval", 40000)) / 1000.0
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setblocking(False)
         try:
             sock.connect((host, port))
         except OSError:
             pass
-        xa_log(token, key, "voice ws: READY, gửi UDP discovery")
+        xa_log(token, key, f"voice ws: READY (mode: {mode}), gửi UDP discovery")
         try:
             await loop.sock_sendto(sock, struct.pack(">I", ssrc) + b"\x00" * 66, (host, port))
             try:
@@ -943,23 +1043,41 @@ async def _voice_handshake(token, key, guild_id, channel_id, session_id, endpoin
                 raise ConnectionError("voice ws timeout chờ SESSION_DESCRIPTION")
             if msg.get("op") == 4:
                 secret = bytes(msg["d"]["secret_key"])
-        await ws.send(json.dumps({"op": 3, "d": None}))
-        is_spk = 1 if xa_is_on(token, key) else 0
+        is_spk = 5 if xa_is_on(token, key) else 0
         await ws.send(json.dumps({"op": 5, "d": {"speaking": is_spk, "delay": 0, "ssrc": ssrc}}))
+
+        cipher = None
+        if mode == "aead_aes256_gcm_rtpsize":
+            cipher = AESGCM(secret)
+        elif mode == "aead_xchacha20_poly1305_rtpsize":
+            from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+            cipher = ChaCha20Poly1305(secret)
+        elif mode.startswith("xsalsa"):
+            try:
+                from nacl.secret import SecretBox
+                cipher = SecretBox(secret)
+            except Exception:
+                pass
+
+        xa_log(token, key, f"voice kết nối thành công: mode={mode}, ssrc={ssrc}")
         return {
             "ws": ws,
             "sock": sock,
             "host": host,
             "port": port,
-            "use_crypto": mode.startswith("xsalsa"),
-            "box": SecretBox(secret) if mode.startswith("xsalsa") else None,
+            "mode": mode,
+            "cipher": cipher,
             "ssrc": ssrc,
             "seq": random.randrange(0, 65536),
             "ts": random.randrange(0, 2 ** 32),
+            "nonce_counter": 0,
             "fi": 0,
             "loop": loop,
+            "hb_task": hb_task,
         }
     except Exception:
+        if hb_task:
+            hb_task.cancel()
         try:
             await ws.close()
         except Exception:
@@ -969,11 +1087,28 @@ async def _voice_handshake(token, key, guild_id, channel_id, session_id, endpoin
 
 async def _xa_send_frame(vctx, frames):
     hdr = struct.pack(">BBHII", 0x80, 0x78, vctx["seq"] & 0xFFFF, vctx["ts"] & 0xFFFFFFFF, vctx["ssrc"])
-    if vctx.get("use_crypto") and vctx.get("box"):
+    raw_frame = frames[vctx["fi"] % len(frames)]
+    mode = vctx.get("mode", "")
+    cipher = vctx.get("cipher")
+
+    if cipher and mode == "aead_aes256_gcm_rtpsize":
+        cnt = vctx["nonce_counter"] & 0xFFFFFFFF
+        vctx["nonce_counter"] = (cnt + 1) & 0xFFFFFFFF
+        nonce = struct.pack("<I", cnt) + b"\x00" * 8
+        ciphertext = cipher.encrypt(nonce, raw_frame, hdr)
+        pkt = hdr + ciphertext + struct.pack("<I", cnt)
+    elif cipher and mode == "aead_xchacha20_poly1305_rtpsize":
+        cnt = vctx["nonce_counter"] & 0xFFFFFFFF
+        vctx["nonce_counter"] = (cnt + 1) & 0xFFFFFFFF
+        nonce = struct.pack("<I", cnt) + b"\x00" * 20
+        ciphertext = cipher.encrypt(nonce, raw_frame, hdr)
+        pkt = hdr + ciphertext + struct.pack("<I", cnt)
+    elif cipher and mode.startswith("xsalsa"):
         nonce = hdr + b"\x00" * 12
-        pkt = hdr + vctx["box"].encrypt(frames[vctx["fi"] % len(frames)], nonce)[24:]
+        pkt = hdr + cipher.encrypt(raw_frame, nonce)[24:]
     else:
-        pkt = hdr + frames[vctx["fi"] % len(frames)]
+        pkt = hdr + raw_frame
+
     vctx["seq"] = (vctx["seq"] + 1) & 0xFFFF
     vctx["ts"] = (vctx["ts"] + 960) & 0xFFFFFFFF
     vctx["fi"] += 1
